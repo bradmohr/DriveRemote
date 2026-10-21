@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACS550 Modbus Panel</title>
+<style>
+:root{
+  --bg:#0f1317; --panel:#171d23; --panel2:#1d252c; --line:#2a343d;
+  --text:#e6edf3; --muted:#8b98a5; --accent:#ff6b1a; --accent2:#ffa45c;
+  --ok:#2ecc71; --warn:#f1c40f; --bad:#e74c3c; --info:#3fa9f5;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);background:#12171c;position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.3px}
+header h1 span{color:var(--accent)}
+.tabs{display:flex;gap:4px;margin-left:24px}
+.tab{background:none;border:1px solid transparent;color:var(--muted);padding:6px 14px;border-radius:6px;cursor:pointer;font:inherit}
+.tab.active{color:var(--text);border-color:var(--line);background:var(--panel)}
+.conn-pill{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.dot{width:11px;height:11px;border-radius:50%;background:#444;box-shadow:0 0 0 2px #0006}
+.dot.ok{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.dot.bad{background:var(--bad);box-shadow:0 0 10px var(--bad)}
+.dot.warn{background:var(--warn);box-shadow:0 0 10px var(--warn)}
+main{padding:18px 20px;max-width:1400px;margin:0 auto}
+.grid{display:grid;grid-template-columns:300px 1fr 320px;gap:16px}
+@media (max-width:1100px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 0 12px;font-weight:600}
+.stack{display:flex;flex-direction:column;gap:16px}
+label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
+select,input[type=number],input[type=text]{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+button.btn{border:none;border-radius:8px;padding:10px 14px;font:600 14px "Segoe UI",sans-serif;cursor:pointer;color:#fff;background:#33404b;transition:filter .1s,transform .05s}
+button.btn:hover{filter:brightness(1.15)}
+button.btn:active{transform:translateY(1px)}
+button.btn:disabled{opacity:.35;cursor:not-allowed;filter:none}
+.btn.primary{background:var(--accent)}
+.btn.start{background:#1f9d55;font-size:18px;padding:16px}
+.btn.stop{background:#c0392b;font-size:18px;padding:16px}
+.btn.amber{background:#b7791f}
+.btn.full{width:100%}
+.hint{font-size:12px;color:var(--muted);margin-top:8px}
+.warnbox{background:#3a2a10;border:1px solid #7a5a1f;color:#ffd58a;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;display:none}
+/* centre */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center}
+.bigval{font:600 54px/1 var(--mono);margin-top:-70px}
+.bigunit{color:var(--muted);font-size:14px;margin-top:4px}
+.runstate{margin-top:12px;font:600 13px var(--mono);padding:5px 14px;border-radius:20px;background:#26303a;letter-spacing:1px}
+.runstate.run{background:#174d2e;color:#7dffb0}
+.runstate.fault{background:#5a1a14;color:#ffb3a8}
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.sp-row{display:flex;align-items:center;gap:12px;margin-top:14px}
+.sp-row input[type=range]{flex:1;accent-color:var(--accent)}
+.sp-row input[type=number]{width:110px}
+.dir{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.dir button{flex:1;background:var(--panel2);border:none;color:var(--muted);padding:8px;font:600 13px inherit;cursor:pointer}
+.dir button.on{background:var(--accent);color:#fff}
+/* values */
+.vals{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.val{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.val .k{font-size:11px;color:var(--muted)}
+.val .v{font:600 20px var(--mono)}
+.val .u{font-size:12px;color:var(--muted);margin-left:3px}
+.val.na .v{color:#55606b}
+.bits{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.bit{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);background:var(--panel2);padding:6px 8px;border-radius:6px}
+.bit i{width:9px;height:9px;border-radius:50%;background:#3a444e;flex:none}
+.bit.on{color:var(--text)}
+.bit.on i{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.bit.on.bad i{background:var(--bad);box-shadow:0 0 6px var(--bad)}
+.bit.on.warn i{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.words{font:12px var(--mono);color:var(--muted);margin-top:10px;display:flex;gap:18px;flex-wrap:wrap}
+.words b{color:var(--text)}
+.log{font:12px var(--mono);height:180px;overflow:auto;background:#0b0f12;border:1px solid var(--line);border-radius:6px;padding:8px;white-space:pre-wrap}
+.log .err{color:#ff8a7a}.log .ok{color:#7dffb0}.log .tx{color:#8fc9ff}
+.stats{display:flex;gap:14px;font:12px var(--mono);color:var(--muted);margin-bottom:8px;flex-wrap:wrap}
+.stats b{color:var(--text)}
+.fault-line{margin-top:10px;font-size:13px}
+.fault-line b{color:var(--accent2)}
+.bottom{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-top:16px}
+@media (max-width:1100px){.bottom{grid-template-columns:1fr}}
+/* guide */
+#guide{display:none}
+#guide .card{margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+td code,p code,li code{font-family:var(--mono);color:var(--accent2)}
+#guide p,#guide li{color:#c9d3dc}
+</style>
+</head>
+<body>
+<header>
+  <h1>ABB <span>ACS550</span> · Modbus RTU Panel</h1>
+  <div class="tabs">
+    <button class="tab active" data-tab="panel">Control panel</button>
+    <button class="tab" data-tab="guide">Drive setup guide</button>
+  </div>
+  <div class="conn-pill"><div class="dot" id="hdrDot"></div><span id="hdrTxt">Disconnected</span></div>
+</header>
+
+<main>
+<div id="panel">
+  <div class="warnbox" id="noSerial">Your browser doesn't support Web Serial. Open this file in <b>Google Chrome</b> or <b>Microsoft Edge</b> on a desktop PC.</div>
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="stack">
+      <div class="card">
+        <h2>Connection</h2>
+        <div class="row">
+          <div><label>Baud rate (5303)</label>
+            <select id="baud"><option>9600</option><option selected>19200</option><option>38400</option><option>57600</option><option>76800</option></select></div>
+          <div><label>Format (5304)</label>
+            <select id="fmt"><option value="8N1" selected>8N1</option><option value="8N2">8N2</option><option value="8E1">8E1</option><option value="8O1">8O1</option></select></div>
+        </div>
+        <div class="row">
+          <div><label>Station ID (5302)</label><input type="number" id="slave" min="1" max="247" value="1"></div>
+          <div><label>Poll (ms)</label><input type="number" id="pollMs" min="100" max="5000" step="50" value="250"></div>
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn primary full" id="btnConn">Connect</button>
+        </div>
+        <div class="hint">Connect picks the USB-RS485 COM port. The page only <i>monitors</i> until you press a command button.</div>
+      </div>
+
+      <div class="card">
+        <h2>Reference scaling</h2>
+        <div class="row">
+          <div><label>REF1 MAX (1105)</label><input type="number" id="ref1max" value="50" step="0.1"></div>
+          <div><label>Unit</label><select id="refunit"><option>Hz</option><option>rpm</option></select></div>
+        </div>
+        <div class="hint" id="scaleHint">Read from the drive on connect (9904 + 1105). 20000 on the bus = REF1 MAX.</div>
+      </div>
+
+      <div class="card">
+        <h2>Parameter tool</h2>
+        <div class="row">
+          <div><label>Parameter (e.g. 1105)</label><input type="text" id="parNo" placeholder="0103"></div>
+          <div><label>Raw value</label><input type="number" id="parVal"></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="btnParRead" disabled>Read</button>
+          <button class="btn amber" id="btnParWrite" disabled>Write</button>
+        </div>
+        <div class="hint" id="parOut">Register = 40000 + parameter number. Values are raw integers (check scaling in the manual).</div>
+      </div>
+    </div>
+
+    <!-- CENTRE -->
+    <div class="card">
+      <h2>Drive</h2>
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 300 180" width="100%" style="max-width:420px">
+          <path d="M30 160 A120 120 0 0 1 270 160" fill="none" stroke="#26303a" stroke-width="18" stroke-linecap="round"/>
+          <path id="arc" d="M30 160 A120 120 0 0 1 270 160" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round" stroke-dasharray="0 400"/>
+          <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ff6b1a"/><stop offset="1" stop-color="#ffc06b"/></linearGradient></defs>
+          <text x="30" y="178" fill="#8b98a5" font-size="11" text-anchor="middle">0</text>
+          <text x="270" y="178" fill="#8b98a5" font-size="11" text-anchor="middle" id="gMax">1500</text>
+        </svg>
+        <div class="bigval" id="bigFreq">----</div>
+        <div class="bigunit">Motor speed (rpm) · 0102</div>
+        <div class="runstate" id="runState">OFFLINE</div>
+      </div>
+
+      <div class="sp-row">
+        <input type="range" id="spSlider" min="0" max="50" step="0.1" value="0">
+        <input type="number" id="spNum" min="0" max="50" step="0.1" value="0">
+        <span id="spUnit" style="color:var(--muted)">Hz</span>
+      </div>
+      <div class="row" style="margin-top:10px;align-items:center">
+        <div class="dir"><button id="dirF" class="on">FWD</button><button id="dirR">REV</button></div>
+        <div class="hint" style="margin:0">REV sends a negative reference (needs 1003 = 3 REQUEST).</div>
+      </div>
+
+      <div class="ctrl-grid">
+        <button class="btn start" id="btnStart" disabled>START</button>
+        <button class="btn stop" id="btnStop" disabled>STOP</button>
+        <button class="btn" id="btnCoast" disabled>Coast stop (OFF2)</button>
+        <button class="btn" id="btnQuick" disabled>Quick stop (OFF3)</button>
+        <button class="btn amber" id="btnReset" disabled style="grid-column:span 2">Reset fault</button>
+      </div>
+      <div class="hint">These are not safety functions. Keep a hard-wired E-stop on the machine.</div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="stack">
+      <div class="card">
+        <h2>Actual values</h2>
+        <div class="vals" id="vals"></div>
+        <div class="fault-line">Last fault (0401): <b id="lastFault">--</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="card">
+      <h2>Status word (40004)</h2>
+      <div class="bits" id="bits"></div>
+      <div class="words">CW sent: <b id="cwOut">—</b> REF sent: <b id="refOut">—</b> SW: <b id="swOut">—</b></div>
+    </div>
+    <div class="card">
+      <h2>Comms</h2>
+      <div class="stats">TX <b id="sTx">0</b> RX <b id="sRx">0</b> Timeouts <b id="sTo">0</b> Errors <b id="sErr">0</b> Cycle <b id="sCyc">–</b></div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- GUIDE -->
+<div id="guide">
+  <div class="card">
+    <h2>1 · Wiring (EFB terminals X1:28–32)</h2>
+    <table>
+      <tr><th>ACS550 terminal</th><th>Signal</th><th>USB-RS485 dongle</th></tr>
+      <tr><td>28</td><td>Screen</td><td>Cable shield (earth at one end only)</td></tr>
+      <tr><td>29</td><td>B (+)</td><td>A / D+ / TX+</td></tr>
+      <tr><td>30</td><td>A (−)</td><td>B / D− / TX−</td></tr>
+      <tr><td>31</td><td>AGND</td><td>GND (if the dongle has one)</td></tr>
+      <tr><td>32</td><td>Screen</td><td>—</td></tr>
+    </table>
+    <p>ABB's A/B naming is the reverse of most cheap dongles. If you get only timeouts, swap the two data wires — it does no harm. Set termination jumper/switch <code>J2</code> to ON (bus end). Use twisted pair, and isolate the drive before opening the cover.</p>
+  </div>
+
+  <div class="card">
+    <h2>2 · Drive parameters (set in this order)</h2>
+    <table>
+      <tr><th>Par.</th><th>Name</th><th>Set to</th><th>Why</th></tr>
+      <tr><td>1602</td><td>PARAMETER LOCK</td><td>1 OPEN</td><td>Allow edits</td></tr>
+      <tr><td>9802</td><td>COMM PROT SEL</td><td>1 STD MODBUS</td><td>Enables the built-in RS485 port</td></tr>
+      <tr><td>5302</td><td>EFB STATION ID</td><td>1</td><td>Modbus slave address</td></tr>
+      <tr><td>5303</td><td>EFB BAUD RATE</td><td>19.2 kb/s</td><td>Must match this page</td></tr>
+      <tr><td>5304</td><td>EFB PARITY</td><td>0 = 8 NONE 1</td><td>Must match this page</td></tr>
+      <tr><td>5305</td><td>EFB CTRL PROFILE</td><td>0 ABB DRV LIM</td><td>Control word format used here</td></tr>
+      <tr><td>1001</td><td>EXT1 COMMANDS</td><td>10 COMM</td><td>Start/stop from Modbus</td></tr>
+      <tr><td>1102</td><td>EXT1/EXT2 SEL</td><td>0 EXT1</td><td>Always use EXT1</td></tr>
+      <tr><td>1103</td><td>REF1 SELECT</td><td>8 COMM</td><td>Speed reference from Modbus</td></tr>
+      <tr><td>1104 / 1105</td><td>REF1 MIN / MAX</td><td>0 / 50.0 Hz</td><td>20000 on the bus = 1105</td></tr>
+      <tr><td>1003</td><td>DIRECTION</td><td>1 FORWARD (or 3 REQUEST)</td><td>3 allows reverse via negative ref</td></tr>
+      <tr><td>1601</td><td>RUN ENABLE</td><td>0 NOT SEL (or 7 COMM)</td><td>Don't leave it waiting on a DI</td></tr>
+      <tr><td>1604</td><td>FAULT RESET SEL</td><td>8 COMM</td><td>Reset faults from the page</td></tr>
+      <tr><td>3018</td><td>COMM FAULT FUNC</td><td>1 FAULT</td><td>Drive trips if the PC goes quiet</td></tr>
+      <tr><td>3019</td><td>COMM FAULT TIME</td><td>3.0 s</td><td>Comm-loss delay</td></tr>
+    </table>
+    <p>Then <b>power-cycle the drive</b> so the group 53 settings take effect. On the panel, <code>5306 EFB OK MESSAGES</code> should count up once this page is connected; <code>5307 EFB CRC ERRORS</code> rising points to baud/parity or wiring problems. Ramp times stay on <code>2202</code>/<code>2203</code>.</p>
+    <p>Finally press <b>LOC/REM</b> on the keypad so the drive is in <b>REMOTE</b> — in LOCAL it ignores Modbus commands.</p>
+  </div>
+
+  <div class="card">
+    <h2>3 · Modbus register map (holding registers, FC03 read / FC06 & FC16 write)</h2>
+    <table>
+      <tr><th>Register</th><th>Address on wire</th><th>Content</th><th>Scaling</th></tr>
+      <tr><td>40001</td><td>0</td><td>Control word (write)</td><td>bits, see below</td></tr>
+      <tr><td>40002</td><td>1</td><td>Reference 1 (write)</td><td>0…20000 = 0…1105, negative = reverse</td></tr>
+      <tr><td>40004</td><td>3</td><td>Status word (read)</td><td>bits</td></tr>
+      <tr><td>40102</td><td>101</td><td>0102 SPEED</td><td>1 rpm</td></tr>
+      <tr><td>40103</td><td>102</td><td>0103 OUTPUT FREQ</td><td>0.1 Hz</td></tr>
+      <tr><td>40104</td><td>103</td><td>0104 CURRENT</td><td>0.1 A</td></tr>
+      <tr><td>40105</td><td>104</td><td>0105 TORQUE</td><td>0.1 %</td></tr>
+      <tr><td>40106</td><td>105</td><td>0106 POWER</td><td>0.1 kW</td></tr>
+      <tr><td>40107</td><td>106</td><td>0107 DC BUS VOLTAGE</td><td>1 V</td></tr>
+      <tr><td>40109</td><td>108</td><td>0109 OUTPUT VOLTAGE</td><td>1 V</td></tr>
+      <tr><td>40110</td><td>109</td><td>0110 DRIVE TEMP</td><td>0.1 °C</td></tr>
+      <tr><td>40401</td><td>400</td><td>0401 LAST FAULT</td><td>fault code</td></tr>
+      <tr><td>4xxyy</td><td>xxyy − 1</td><td>Any parameter xx.yy</td><td>per manual</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>4 · Control word values (ABB DRV LIM profile)</h2>
+    <table>
+      <tr><th>Command</th><th>Hex</th><th>Decimal</th><th>Notes</th></tr>
+      <tr><td>Ready / Stop (ramp)</td><td>0x0476</td><td>1142</td><td>Send first after power-up or a fault</td></tr>
+      <tr><td>Run</td><td>0x047F</td><td>1151</td><td>Runs at Reference 1</td></tr>
+      <tr><td>Coast stop (OFF2)</td><td>0x047D</td><td>1149</td><td>Motor freewheels</td></tr>
+      <tr><td>Quick stop (OFF3)</td><td>0x047B</td><td>1147</td><td>Uses emergency decel 2208</td></tr>
+      <tr><td>Fault reset</td><td>0x04F6</td><td>1270</td><td>Bit 7 rising edge, then back to 0x0476</td></tr>
+    </table>
+    <p>Bit 10 (0x0400) = fieldbus control enabled; bits 4–6 must be 1 for the ramp to work. Start sequence: write <code>1142</code>, wait for status bit 0 (Ready to switch on), then write <code>1151</code>.</p>
+  </div>
+</div>
+</main>
+
+<script>
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const s16 = v => v > 32767 ? v - 65536 : v;
+const hex = v => '0x' + (v & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+
+const CW = { STOP:0x0476, RUN:0x047F, COAST:0x047D, QUICK:0x047B, RESET:0x04F6 };
+
+const VALUES = [
+  {key:'speed',  reg:40102, label:'Motor speed',   scale:1,   unit:'rpm', dp:0, signed:true},
+  {key:'freq',   reg:40103, label:'Output freq',   scale:0.1, unit:'Hz',  dp:1, signed:true},
+  {key:'current',reg:40104, label:'Current',       scale:0.1, unit:'A',   dp:1},
+  {key:'torque', reg:40105, label:'Torque',        scale:0.1, unit:'%',   dp:1, signed:true},
+  {key:'power',  reg:40106, label:'Power',         scale:0.1, unit:'kW',  dp:1, signed:true},
+  {key:'dcbus',  reg:40107, label:'DC bus',        scale:1,   unit:'V',   dp:0},
+  {key:'outv',   reg:40109, label:'Output volts',  scale:1,   unit:'V',   dp:0},
+  {key:'temp',   reg:40110, label:'Drive temp',    scale:0.1, unit:'°C',  dp:1, signed:true},
+];
+// grouped block reads (falls back to single reads if a block is refused)
+const GROUPS = [
+  {start:40102, keys:['speed','freq','current','torque','power','dcbus'], split:false},
+  {start:40109, keys:['outv','temp'], split:false},
+];
+
+const SW_BITS = [
+  ['Ready to switch on',''],['Ready to run',''],['Running (ref enabled)',''],['FAULT','bad'],
+  ['OFF2 inactive',''],['OFF3 inactive',''],['Switch-on inhibited','warn'],['ALARM','warn'],
+  ['At setpoint',''],['Remote (fieldbus)',''],['Above limit',''],['EXT2 selected',''],['Ext run enable','']
+];
+
+const FAULTS = {0:'None',1:'OVERCURRENT',2:'DC OVERVOLT',3:'DEV OVERTEMP',4:'SHORT CIRC',6:'DC UNDERVOLT',
+  7:'AI1 LOSS',8:'AI2 LOSS',9:'MOT OVERTEMP',10:'PANEL LOSS',11:'ID RUN FAIL',12:'MOTOR STALL',
+  14:'EXT FAULT 1',15:'EXT FAULT 2',16:'EARTH FAULT',18:'THERM FAIL',19:'OPEX LINK',20:'OPEX PWR',
+  21:'CURR MEAS',22:'SUPPLY PHASE',24:'OVERSPEED',26:'DRIVE ID',27:'CONFIG FILE',28:'SERIAL 1 ERR (comm loss)',
+  29:'EFB CON FILE',34:'MOTOR PHASE',35:'OUTP WIRING'};
+
+// ---------- state ----------
+let port=null, writer=null, reader=null, keepReading=false, rx=[];
+let connected=false, polling=false, cw=null, dir=1, lastSW=null, failStreak=0;
+const stats={tx:0,rx:0,to:0,err:0};
+let chain = Promise.resolve();
+const exclusive = fn => { const p = chain.then(fn, fn); chain = p.catch(()=>{}); return p; };
+
+// ---------- UI build ----------
+$('#vals').innerHTML = VALUES.map(v=>`<div class="val" id="v_${v.key}"><div class="k">${v.label} · ${String(v.reg-40000).padStart(4,'0')}</div><div><span class="v">--</span><span class="u">${v.unit}</span></div></div>`).join('');
+$('#bits').innerHTML = SW_BITS.map((b,i)=>`<div class="bit ${b[1]}" id="b${i}"><i></i>${i}: ${b[0]}</div>`).join('');
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  $('#panel').style.display = t.dataset.tab==='panel'?'block':'none';
+  $('#guide').style.display = t.dataset.tab==='guide'?'block':'none';
+});
+
+function log(msg, cls=''){
+  const el=$('#log'); const d=document.createElement('div');
+  d.className=cls; d.textContent=new Date().toLocaleTimeString()+'  '+msg;
+  el.appendChild(d); while(el.children.length>200) el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+function setConn(state, txt){
+  $('#hdrDot').className='dot '+state; $('#hdrTxt').textContent=txt;
+}
+function updStats(){ $('#sTx').textContent=stats.tx; $('#sRx').textContent=stats.rx; $('#sTo').textContent=stats.to; $('#sErr').textContent=stats.err; }
+
+// settings persistence
+const SETTINGS=['baud','fmt','slave','pollMs','ref1max','refunit'];
+try{ const s=JSON.parse(localStorage.getItem('acs550panel')||'{}'); SETTINGS.forEach(k=>{ if(s[k]!=null) $('#'+k).value=s[k]; }); }catch(e){}
+function saveSettings(){ try{ const s={}; SETTINGS.forEach(k=>s[k]=$('#'+k).value); localStorage.setItem('acs550panel',JSON.stringify(s)); }catch(e){} }
+SETTINGS.forEach(k=>$('#'+k).addEventListener('change',()=>{saveSettings(); applyScale();}));
+
+// ---------- setpoint ----------
+let gaugeRpmMax = 1500;   // arc meter full scale; replaced by 9908 MOTOR NOM SPEED on connect
+function ref1Max(){ return Math.max(0.1, parseFloat($('#ref1max').value)||50); }
+function applyScale(){
+  const m=ref1Max(), u=$('#refunit').value;
+  ['#spSlider','#spNum'].forEach(s=>{ $(s).max=m; $(s).step = u==='Hz'?0.1:1; });
+  $('#spUnit').textContent=u;
+  $('#gMax').textContent = gaugeRpmMax;
+  if(parseFloat($('#spNum').value)>m){ $('#spNum').value=m; $('#spSlider').value=m; }
+}
+applyScale();
+$('#spSlider').oninput=()=>{ $('#spNum').value=$('#spSlider').value; };
+$('#spNum').oninput=()=>{ $('#spSlider').value=$('#spNum').value; };
+$('#dirF').onclick=()=>{dir=1; $('#dirF').classList.add('on'); $('#dirR').classList.remove('on');};
+$('#dirR').onclick=()=>{dir=-1; $('#dirR').classList.add('on'); $('#dirF').classList.remove('on');};
+function refWord(){
+  const sp=Math.min(ref1Max(), Math.max(0, parseFloat($('#spNum').value)||0));
+  let r=Math.round(dir*sp/ref1Max()*20000);
+  r=Math.max(-32768,Math.min(32767,r));
+  return r & 0xFFFF;
+}
+
+// ---------- Modbus RTU ----------
+function crc16(bytes){ let c=0xFFFF; for(const b of bytes){ c^=b; for(let i=0;i<8;i++) c=(c&1)?(c>>1)^0xA001:c>>1; } return c; }
+function frame(arr){ const c=crc16(arr); return new Uint8Array([...arr, c&0xFF, c>>8]); }
+class MbException extends Error{ constructor(code){ super('Modbus exception '+code+({1:' (illegal function)',2:' (illegal address)',3:' (illegal value)',4:' (device failure)',6:' (busy)'}[code]||'')); this.code=code; } }
+const slaveId = () => parseInt($('#slave').value)||1;
+
+async function transact(req, expectLen){
+  await sleep(5);               // inter-frame gap
+  rx=[];
+  await writer.write(req); stats.tx++;
+  const fc=req[1], t0=performance.now(), tmo=400;
+  while(performance.now()-t0 < tmo){
+    if(rx.length>=5 && rx[1]===(fc|0x80)){
+      const f=rx.slice(0,5); if(crc16(f.slice(0,3))===(f[3]|f[4]<<8)){ stats.rx++; throw new MbException(f[2]); }
+    }
+    if(rx.length>=expectLen) break;
+    await sleep(3);
+  }
+  if(rx.length<expectLen){ stats.to++; throw new Error('Timeout (no reply)'); }
+  const r=rx.slice(0,expectLen);
+  if(crc16(r.slice(0,-2)) !== (r[expectLen-2] | r[expectLen-1]<<8)){ stats.err++; throw new Error('CRC error'); }
+  if(r[0]!==req[0] || r[1]!==fc){ stats.err++; throw new Error('Unexpected reply'); }
+  stats.rx++;
+  return r;
+}
+async function readRegs(reg, n){
+  const a=reg-40001;
+  const r=await transact(frame([slaveId(),3,a>>8,a&255,n>>8,n&255]), 5+2*n);
+  const out=[]; for(let i=0;i<n;i++) out.push(r[3+2*i]<<8 | r[4+2*i]); return out;
+}
+async function writeReg(reg, v){
+  const a=reg-40001; v&=0xFFFF;
+  await transact(frame([slaveId(),6,a>>8,a&255,v>>8,v&255]), 8);
+}
+async function writeRegs(reg, vals){
+  const a=reg-40001, n=vals.length, body=[slaveId(),16,a>>8,a&255,n>>8,n&255,n*2];
+  vals.forEach(v=>{ v&=0xFFFF; body.push(v>>8, v&255); });
+  await transact(frame(body), 8);
+}
+
+// ---------- serial ----------
+async function readLoop(){
+  while(port && port.readable && keepReading){
+    reader=port.readable.getReader();
+    try{ while(true){ const {value,done}=await reader.read(); if(done) break; if(value) for(const b of value) rx.push(b); } }
+    catch(e){ if(keepReading) log('Serial read error: '+e.message,'err'); }
+    finally{ try{reader.releaseLock();}catch(e){} }
+  }
+}
+
+async function connect(){
+  if(!('serial' in navigator)){ $('#noSerial').style.display='block'; return; }
+  try{
+    port = await navigator.serial.requestPort();
+    const f=$('#fmt').value;
+    await port.open({ baudRate:parseInt($('#baud').value), dataBits:8,
+      stopBits: f==='8N2'?2:1, parity: f==='8E1'?'even':f==='8O1'?'odd':'none', flowControl:'none', bufferSize:1024 });
+    writer = port.writable.getWriter();
+    keepReading=true; readLoop();
+    connected=true; cw=null; failStreak=0;
+    $('#btnConn').textContent='Disconnect';
+    ['#baud','#fmt'].forEach(s=>$(s).disabled=true);
+    setButtons(true);
+    setConn('warn','Port open — talking to drive…');
+    log(`Port opened ${$('#baud').value} ${f}, station ${slaveId()}`,'ok');
+    await exclusive(readScaling);
+    polling=true; pollLoop();
+  }catch(e){
+    log('Connect failed: '+e.message,'err'); setConn('bad','Connect failed');
+    await closePort();
+  }
+}
+async function readScaling(){
+  try{
+    const mode=(await readRegs(49904,1))[0];
+    const raw=(await readRegs(41105,1))[0];
+    if(mode===3){ $('#refunit').value='Hz'; $('#ref1max').value=(s16(raw)*0.1).toFixed(1); }
+    else { $('#refunit').value='rpm'; $('#ref1max').value=s16(raw); }
+    applyScale(); saveSettings();
+    $('#scaleHint').textContent=`From drive: 9904 = ${mode} (${mode===3?'SCALAR:FREQ':'VECTOR'}), 1105 REF1 MAX = ${$('#ref1max').value} ${$('#refunit').value}`;
+    log(`Drive answered. REF1 MAX = ${$('#ref1max').value} ${$('#refunit').value}`,'ok');
+  }catch(e){ log('Could not read 9904/1105: '+e.message+' — using manual scaling','err'); }
+  try{
+    const ns=s16((await readRegs(49908,1))[0]);
+    if(ns>0){ gaugeRpmMax=ns; $('#gMax').textContent=ns; log(`Gauge full scale = ${ns} rpm (9908)`,'ok'); }
+  }catch(e){ log('Could not read 9908 — gauge full scale stays '+gaugeRpmMax+' rpm','err'); }
+}
+async function closePort(){
+  polling=false; keepReading=false;
+  try{ if(reader) await reader.cancel(); }catch(e){}
+  try{ if(writer){ writer.releaseLock(); } }catch(e){}
+  try{ if(port) await port.close(); }catch(e){}
+  port=null; writer=null; reader=null; connected=false;
+}
+async function disconnect(){
+  if(cw!==null && cw!==CW.STOP){
+    try{ await exclusive(async()=>{ cw=CW.STOP; await writeRegs(40001,[CW.STOP, refWord()]); }); log('Sent STOP before disconnecting','tx'); }catch(e){}
+  }
+  await exclusive(closePort);
+  $('#btnConn').textContent='Connect'; ['#baud','#fmt'].forEach(s=>$(s).disabled=false);
+  setButtons(false); setConn('','Disconnected'); $('#runState').className='runstate'; $('#runState').textContent='OFFLINE';
+  log('Disconnected');
+}
+$('#btnConn').onclick=()=> connected?disconnect():connect();
+
+function setButtons(on){
+  ['#btnStart','#btnStop','#btnCoast','#btnQuick','#btnReset','#btnParRead','#btnParWrite'].forEach(s=>$(s).disabled=!on);
+}
+
+// ---------- polling ----------
+async function pollOnce(){
+  const t0=performance.now();
+  if(cw!==null){
+    const rw=refWord();
+    await writeRegs(40001,[cw,rw]);
+    $('#cwOut').textContent=hex(cw); $('#refOut').textContent=s16(rw);
+  }
+  const sw=(await readRegs(40004,1))[0]; lastSW=sw; showStatus(sw);
+  const data={};
+  for(const g of GROUPS){
+    if(!g.split){
+      try{ const r=await readRegs(g.start,g.keys.length); g.keys.forEach((k,i)=>data[k]=r[i]); continue; }
+      catch(e){ if(e instanceof MbException){ g.split=true; log(`Block ${g.start} refused, reading one by one`,'err'); } else throw e; }
+    }
+    for(const k of g.keys){
+      const d=VALUES.find(v=>v.key===k); if(d.na) continue;
+      try{ data[k]=(await readRegs(d.reg,1))[0]; }
+      catch(e){ if(e instanceof MbException){ d.na=true; log(`${d.reg} not available`,'err'); } else throw e; }
+    }
+  }
+  try{ const lf=(await readRegs(40401,1))[0]; $('#lastFault').textContent=`${lf} – ${FAULTS[lf]||'see manual'}`; }catch(e){ if(!(e instanceof MbException)) throw e; }
+  showValues(data);
+  $('#sCyc').textContent=Math.round(performance.now()-t0)+' ms';
+}
+async function pollLoop(){
+  while(polling){
+    const t=performance.now();
+    try{
+      await exclusive(pollOnce);
+      if(failStreak>0 || $('#hdrTxt').textContent!=='Online') { setConn('ok','Online'); if(failStreak>0) log('Comms restored','ok'); }
+      failStreak=0;
+    }catch(e){
+      failStreak++; if(failStreak===1||failStreak%20===0) log('Poll: '+e.message,'err');
+      if(failStreak>=3){ setConn('bad','No response from drive'); $('#runState').className='runstate fault'; $('#runState').textContent='NO COMMS'; }
+    }
+    updStats();
+    const wait=Math.max(20,(parseInt($('#pollMs').value)||250)-(performance.now()-t));
+    await sleep(wait);
+  }
+}
+
+function fmtVal(d,raw){ const v=(d.signed?s16(raw):raw)*d.scale; return v.toFixed(d.dp); }
+function showValues(data){
+  VALUES.forEach(d=>{
+    const el=$('#v_'+d.key);
+    if(d.na){ el.classList.add('na'); el.querySelector('.v').textContent='n/a'; return; }
+    if(data[d.key]==null) return;
+    el.querySelector('.v').textContent=fmtVal(d,data[d.key]);
+  });
+  if(data.speed!=null){
+    const n=s16(data.speed);
+    $('#bigFreq').textContent=n.toFixed(0);
+    const frac=Math.min(1,Math.abs(n)/gaugeRpmMax), L=377;
+    $('#arc').setAttribute('stroke-dasharray',`${(frac*L).toFixed(1)} 400`);
+  }
+}
+function showStatus(sw){
+  $('#swOut').textContent=hex(sw);
+  SW_BITS.forEach((b,i)=>$('#b'+i).classList.toggle('on',!!(sw>>i&1)));
+  const rs=$('#runState');
+  if(sw&8){ rs.className='runstate fault'; rs.textContent='FAULT'; }
+  else if(sw&4){ rs.className='runstate run'; rs.textContent = (sw&256)?'RUNNING · AT SPEED':'RUNNING'; }
+  else if(!(sw&512)){ rs.className='runstate'; rs.textContent='LOCAL / NOT REMOTE'; }
+  else if(sw&64){ rs.className='runstate'; rs.textContent='SWITCH-ON INHIBITED'; }
+  else { rs.className='runstate'; rs.textContent = (sw&1)?'READY':'STOPPED'; }
+}
+
+// ---------- commands ----------
+async function sendCW(v, label){
+  cw=v;
+  await exclusive(()=>writeRegs(40001,[cw,refWord()]));
+  $('#cwOut').textContent=hex(cw); log(`${label}: CW ${hex(v)}  REF ${s16(refWord())}`,'tx');
+}
+async function cmd(fn){ try{ await fn(); }catch(e){ log('Command failed: '+e.message,'err'); } }
+
+$('#btnStart').onclick=()=>cmd(async()=>{
+  if(lastSW!=null && (lastSW&8)){ log('Drive is faulted — reset first','err'); return; }
+  await sendCW(CW.STOP,'Ready');
+  for(let i=0;i<10;i++){ await sleep(60); try{ const sw=(await exclusive(()=>readRegs(40004,1)))[0]; if(sw&1) break; }catch(e){} }
+  await sendCW(CW.RUN,'Start');
+});
+$('#btnStop').onclick=()=>cmd(()=>sendCW(CW.STOP,'Stop'));
+$('#btnCoast').onclick=()=>cmd(()=>sendCW(CW.COAST,'Coast stop'));
+$('#btnQuick').onclick=()=>cmd(()=>sendCW(CW.QUICK,'Quick stop'));
+$('#btnReset').onclick=()=>cmd(async()=>{
+  await sendCW(CW.STOP,'Reset prep'); await sleep(150);
+  await sendCW(CW.RESET,'Reset pulse'); await sleep(250);
+  await sendCW(CW.STOP,'Reset done');
+});
+// apply new setpoint immediately while running
+$('#spNum').addEventListener('change',()=>{ if(connected && cw!==null) cmd(()=>exclusive(()=>writeRegs(40001,[cw,refWord()]))); });
+$('#spSlider').addEventListener('change',()=>{ if(connected && cw!==null) cmd(()=>exclusive(()=>writeRegs(40001,[cw,refWord()]))); });
+
+// ---------- parameter tool ----------
+function parReg(){ const p=parseInt(($('#parNo').value||'').replace(/\D/g,''),10); if(!(p>0 && p<10000)) throw new Error('Enter a parameter number like 1105'); return {p, reg:40000+p}; }
+$('#btnParRead').onclick=()=>cmd(async()=>{
+  const {p,reg}=parReg(); const v=(await exclusive(()=>readRegs(reg,1)))[0];
+  $('#parVal').value=v; $('#parOut').textContent=`${String(p).padStart(4,'0')} (reg ${reg}) = ${v}  [signed ${s16(v)}, ${hex(v)}]`;
+  log(`Read ${String(p).padStart(4,'0')} = ${v}`);
+});
+$('#btnParWrite').onclick=()=>cmd(async()=>{
+  const {p,reg}=parReg(); const v=parseInt($('#parVal').value,10);
+  if(isNaN(v)) throw new Error('Enter a raw value');
+  if(!confirm(`Write raw value ${v} to parameter ${String(p).padStart(4,'0')} (register ${reg})?`)) return;
+  await exclusive(()=>writeReg(reg,v));
+  $('#parOut').textContent=`Wrote ${v} to ${String(p).padStart(4,'0')}`; log(`Wrote ${String(p).padStart(4,'0')} = ${v}`,'tx');
+});
+
+if(!('serial' in navigator)) $('#noSerial').style.display='block';
+navigator.serial && navigator.serial.addEventListener('disconnect',()=>{ if(connected){ log('USB adapter unplugged','err'); disconnect(); } });
+log('Ready. Open the "Drive setup guide" tab first if the drive is not configured yet.');
+</script>
+</body>
+</html>

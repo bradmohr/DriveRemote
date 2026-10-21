@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12171c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ACS550">
+<title>ACS550 Remote</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header>
+  <h1>ABB <span>ACS550</span></h1>
+  <div class="pills">
+    <div class="pill" id="pBroker"><i class="dot"></i>Broker</div>
+    <div class="pill" id="pPanel"><i class="dot"></i>Panel</div>
+    <div class="pill" id="pDrive"><i class="dot"></i>Drive</div>
+  </div>
+</header>
+<div class="banner" id="banner" hidden></div>
+
+<main>
+  <!-- DRIVE -->
+  <section class="tab active" id="tab-drive">
+    <div class="card gauge-card live">
+      <svg viewBox="0 0 300 180" aria-hidden="true">
+        <path d="M30 160 A120 120 0 0 1 270 160" fill="none" stroke="#26303a" stroke-width="18" stroke-linecap="round"/>
+        <path id="arc" d="M30 160 A120 120 0 0 1 270 160" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round" stroke-dasharray="0 400"/>
+        <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ff6b1a"/><stop offset="1" stop-color="#ffc06b"/></linearGradient></defs>
+        <text x="30" y="178" fill="#8b98a5" font-size="11" text-anchor="middle">0</text>
+        <text x="270" y="178" fill="#8b98a5" font-size="11" text-anchor="middle" id="gMax">1500</text>
+      </svg>
+      <div class="bigval" id="bigSpeed">----</div>
+      <div class="bigunit">Motor speed (rpm) · 0102</div>
+      <div class="runstate" id="runState">--</div>
+    </div>
+
+    <div class="quick live" id="quick"></div>
+
+    <div class="card">
+      <h2>Speed setpoint</h2>
+      <div class="sp-now">Drive setpoint: <b id="spNow">--</b></div>
+      <div class="sp-row">
+        <button class="btn step" id="spMinus" aria-label="Decrease">&minus;</button>
+        <input type="range" id="spSlider" min="0" max="1500" step="1" value="0">
+        <button class="btn step" id="spPlus" aria-label="Increase">+</button>
+      </div>
+      <div class="sp-row">
+        <input type="number" id="spNum" inputmode="numeric" min="0" step="1" value="0">
+        <span class="muted">rpm</span>
+        <div class="dir"><button id="dirF" class="on">FWD</button><button id="dirR">REV</button></div>
+      </div>
+      <button class="btn primary full" id="btnSetSpeed">Set speed <span id="spPending" hidden>(not sent)</span></button>
+    </div>
+
+    <div class="ctrl-grid">
+      <button class="btn start" id="btnStart">&#9654; START</button>
+      <button class="btn stop" id="btnStop">&#9632; STOP</button>
+      <button class="btn" id="btnCoast">Coast stop</button>
+      <button class="btn" id="btnQuick">Quick stop</button>
+      <button class="btn amber span2" id="btnReset">Reset fault</button>
+    </div>
+    <p class="hint">Not a safety function. Keep the hard-wired E-stop on the machine.</p>
+    <div class="lastlog" id="lastLog"></div>
+  </section>
+
+  <!-- VALUES -->
+  <section class="tab" id="tab-values">
+    <div class="card live">
+      <h2>Actual values</h2>
+      <div class="vals" id="vals"></div>
+      <div class="fault-line">Last fault (0401): <b id="lastFault">--</b></div>
+    </div>
+    <div class="card live">
+      <h2>Status word (0004) <span class="mono" id="swHex">--</span></h2>
+      <div class="bits" id="bits"></div>
+    </div>
+  </section>
+
+  <!-- PARAM -->
+  <section class="tab" id="tab-param">
+    <div class="card">
+      <h2>Parameter</h2>
+      <div class="row">
+        <div><label for="parNo">Number</label><input type="number" id="parNo" inputmode="numeric" placeholder="1105"></div>
+        <div><label for="parVal">Value (scaled units)</label><input type="text" id="parVal" inputmode="decimal"></div>
+      </div>
+      <div class="row gap">
+        <button class="btn" id="btnParRead">Read</button>
+        <button class="btn amber" id="btnParWrite">Write</button>
+      </div>
+      <div class="par-out" id="parOut">Reads publish "?" to the parameter's topic and the panel answers with the value.</div>
+      <p class="hint">Writes only work when <b>Allow parameter writes over MQTT</b> is on in the panel's Setup page. Values use the drive's scaling, e.g. 2202 in seconds, 1105 in rpm (or Hz in scalar mode).</p>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section class="tab" id="tab-log">
+    <div class="card">
+      <h2>Log <button class="btn tiny" id="btnClearLog">Clear</button></h2>
+      <div class="log" id="log"></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="tab" id="tab-settings">
+    <div class="card">
+      <h2>Broker</h2>
+      <label for="sUrl">WebSocket URL</label>
+      <input type="url" id="sUrl" placeholder="wss://xxxxxxxx.ala.us-east-1.emqxsl.com:8084/mqtt" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="row">
+        <div><label for="sUser">Username</label><input type="text" id="sUser" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+        <div><label for="sPass">Password</label><input type="password" id="sPass"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="sShow"> Show password</label>
+      <label class="check"><input type="checkbox" id="sRemember" checked> Remember password on this phone</label>
+      <div class="row">
+        <div><label for="sBase">Base topic</label><input type="text" id="sBase" placeholder="Drive" autocapitalize="off" spellcheck="false"></div>
+        <div><label for="sSuffix">Command suffix</label><input type="text" id="sSuffix" placeholder="empty or /set" autocapitalize="off" spellcheck="false"></div>
+      </div>
+      <div class="row gap">
+        <button class="btn primary" id="btnSave">Save &amp; connect</button>
+        <button class="btn" id="btnDisconnect">Disconnect</button>
+      </div>
+      <div class="hint" id="connInfo"></div>
+    </div>
+    <div class="card help">
+      <h2>EMQX</h2>
+      <p>Use the deployment's <b>WebSocket over TLS</b> address: <code>wss://&lt;address&gt;:8084/mqtt</code>. Create a separate user for this phone under <i>Access Control &rarr; Authentication</i>.</p>
+      <p>Base topic and command suffix must match the panel's Setup page.</p>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button data-tab="drive" class="active"><svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></svg>Drive</button>
+  <button data-tab="values"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg>Values</button>
+  <button data-tab="param"><svg viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>Param</button>
+  <button data-tab="log"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>Log</button>
+  <button data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</button>
+</nav>
+
+<div class="modal" id="modal">
+  <div class="box">
+    <h3 id="mTitle"></h3>
+    <p id="mText"></p>
+    <div class="row gap">
+      <button class="btn" id="mCancel">Cancel</button>
+      <button class="btn primary" id="mOk">OK</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="vendor/mqtt.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
