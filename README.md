@@ -232,6 +232,7 @@ stored only in that phone's browser. Untick *Remember password* if you don't wan
 | [src/settings.cpp](src/settings.cpp) | Saved settings (NVS) |
 | [include/app_config.h](include/app_config.h) | Pins, rotation, timeouts |
 | [phone-app/](phone-app/) | Phone web app (`index.html`, `app.js`, `app.css`, service worker, icons, MQTT.js 5.10.1) |
+| [phone-app/brand/](phone-app/brand/), [phone-app/fonts/](phone-app/fonts/) | Powermate logo and mark, Libre Franklin font (SIL Open Font License, see `OFL.txt`) |
 
 To publish more parameters with proper scaling, add them to the table in `src/acs550.cpp`. Parameters not in the
 table are published as raw integers.

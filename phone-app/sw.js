@@ -1,6 +1,6 @@
 // Service worker: lets the app open from the home screen without a network.
 // Network first so updates show up straight away; cached copy when offline.
-const CACHE = 'acs550-remote-v1';
+const CACHE = 'acs550-remote-v2';
 const SHELL = [
   './',
   'index.html',
@@ -8,6 +8,9 @@ const SHELL = [
   'app.js',
   'vendor/mqtt.min.js',
   'manifest.webmanifest',
+  'fonts/LibreFranklin-latin.woff2',
+  'brand/powermate-logo-white.png',
+  'brand/powermate-mark.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
