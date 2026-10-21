@@ -166,6 +166,19 @@ static String textOf(lv_obj_t *ta)
     return s;
 }
 
+// Accept a pasted URL such as mqtts://host:8883/mqtt as well as a bare host
+static String hostOnly(String s)
+{
+    s.trim();
+    const int scheme = s.indexOf("://");
+    if (scheme >= 0) s = s.substring(scheme + 3);
+    const int slash = s.indexOf('/');
+    if (slash >= 0) s = s.substring(0, slash);
+    const int colon = s.indexOf(':');
+    if (colon >= 0) s = s.substring(0, colon);
+    return s;
+}
+
 // ---------------------------------------------------------------------------
 // Wi-Fi scan
 // ---------------------------------------------------------------------------
@@ -240,7 +253,8 @@ static void onSave(lv_event_t *)
     s.wifiPass = lv_textarea_get_text(s_taWifiPass);
 
     s.mqttEnabled = isOn(s_swMqtt);
-    s.mqttHost = textOf(s_taHost);
+    s.mqttHost = hostOnly(lv_textarea_get_text(s_taHost));
+    lv_textarea_set_text(s_taHost, s.mqttHost.c_str());
     const long port = atol(lv_textarea_get_text(s_taPort));
     s.mqttTls = isOn(s_swTls);
     s.mqttAuth = isOn(s_swAuth);

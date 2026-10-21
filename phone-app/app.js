@@ -430,12 +430,32 @@ function fillSettings() {
   $('#sRemember').checked = cfg.remember;
 }
 
+// Accept whatever the user pastes from the EMQX console: a bare address,
+// host:port, mqtts://..., https://... or a full ws(s):// URL.
+function brokerUrl(input) {
+  const s = input.trim();
+  const m = s.match(/^([a-z][a-z0-9+.-]*):\/\/(.*)$/i);
+  const scheme = m ? m[1].toLowerCase() : '';
+  const rest = m ? m[2] : s;
+  const hp = rest.match(/^([^/:\s]+)(?::(\d+))?(\/\S*)?$/);
+  if (!hp) return null;
+  const isWs = scheme === 'ws' || scheme === 'wss' || scheme === 'http' || scheme === 'https';
+  const secure = scheme !== 'ws' && scheme !== 'http';
+  // Keep a typed WebSocket port; MQTT TCP ports (1883/8883) don't work from a browser
+  const tcpPort = hp[2] === '1883' || hp[2] === '8883';
+  const keep = isWs || (!scheme && !tcpPort);
+  const port = keep && hp[2] ? hp[2] : secure ? '8084' : '8083';
+  const path = keep && hp[3] ? hp[3] : '/mqtt';
+  return `${secure ? 'wss' : 'ws'}://${hp[1]}:${port}${path}`;
+}
+
 function saveSettings() {
-  const url = $('#sUrl').value.trim();
-  if (!/^wss?:\/\/[^/]+/i.test(url)) {
-    toast('The URL must start with wss://');
+  const url = brokerUrl($('#sUrl').value);
+  if (!url) {
+    toast('Enter the EMQX address, e.g. abc123.ala.us-east-1.emqxsl.com');
     return;
   }
+  $('#sUrl').value = url;
   if (location.protocol === 'https:' && /^ws:/i.test(url)) {
     toast('Use wss:// (browsers block ws:// from an https page)');
     return;

@@ -119,8 +119,9 @@
   <section class="tab" id="tab-settings">
     <div class="card">
       <h2>Broker</h2>
-      <label for="sUrl">WebSocket URL</label>
-      <input type="url" id="sUrl" placeholder="wss://xxxxxxxx.ala.us-east-1.emqxsl.com:8084/mqtt" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label for="sUrl">Broker address</label>
+      <input type="text" id="sUrl" inputmode="url" placeholder="abc123.ala.us-east-1.emqxsl.com" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="hint">Paste the EMQX address. Port 8084 is added automatically; only add <code>:port</code> if your WebSocket over TLS port is different.</div>
       <div class="row">
         <div><label for="sUser">Username</label><input type="text" id="sUser" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
         <div><label for="sPass">Password</label><input type="password" id="sPass"></div>
@@ -139,7 +140,7 @@
     </div>
     <div class="card help">
       <h2>EMQX</h2>
-      <p>Use the deployment's <b>WebSocket over TLS</b> address: <code>wss://&lt;address&gt;:8084/mqtt</code>. Create a separate user for this phone under <i>Access Control &rarr; Authentication</i>.</p>
+      <p>Copy the <b>Address</b> from the deployment overview. The app connects with WebSocket over TLS on port 8084 (<code>wss://&lt;address&gt;:8084/mqtt</code>). Create a separate user for this phone under <i>Access Control &rarr; Authentication</i>.</p>
       <p>Base topic and command suffix must match the panel's Setup page.</p>
     </div>
     <div class="card brand-card">
