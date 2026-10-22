@@ -98,9 +98,10 @@ User-facing documentation is in `README.md`. Keep it up to date when behaviour c
   5 s late. The owner saw "read-only" warnings, and a late 0001/0002 echo could have been acted on as a command.
   Now `publishNow()` uses `esp_mqtt_client_publish` directly.
 - Setup switches: "Allow start/stop/speed over MQTT" (default on), "Allow parameter writes over MQTT" (default off).
-- EMQX Cloud: the panel uses host + port **8883** + TLS + login. For now the firmware defaults to the owner's
-  deployment `l11f1a19.ala.asia-southeast1.emqxsl.com` (8883, TLS, login on; no credentials in code). An empty saved
-  host falls back to this default. The phone uses `wss://<address>:8084/mqtt` (the app
+- EMQX Cloud: the panel uses host + port **8883** + TLS + login. For now the firmware default is the placeholder
+  `l11f1aXXXX.ala.asia-southeast1.emqxsl.com` (8883, TLS, login on). The owner asked to keep the real deployment ID
+  out of the public repo, so don't write it into code or docs. The owner's panel has the real address saved in NVS.
+  An empty saved host falls back to the default. The phone uses `wss://<address>:8084/mqtt` (the app
   builds this from a bare address). Use separate users for panel and phone, with an ACL limited to `Drive/#`.
 
 ## Phone app (`phone-app/`)

@@ -10,7 +10,7 @@ struct Settings {
 
     // MQTT
     bool mqttEnabled = true;
-    String mqttHost = "l11f1a19.ala.asia-southeast1.emqxsl.com";  // owner's EMQX Cloud (default for now)
+    String mqttHost = "l11f1aXXXX.ala.asia-southeast1.emqxsl.com";  // placeholder: replace XXXX in Setup
     uint16_t mqttPort = 8883;
     bool mqttTls = true;            // encrypted connection (EMQX Cloud: port 8883)
     bool mqttAuth = true;

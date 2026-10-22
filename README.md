@@ -82,8 +82,9 @@ CH32V003, and the Setup page shows which revision it found. If the picture is up
 ## 4. First start
 
 1. Open **Setup**, tap **Scan**, pick your network and enter the password.
-2. The broker comes pre-filled with Powermate's EMQX Cloud deployment (port 8883, TLS and login on). Enter the
-   panel's username and password. For a different broker, enter its host and port. Turn on *Broker needs
+2. The broker comes pre-filled as `l11f1aXXXX.ala.asia-southeast1.emqxsl.com` (port 8883, TLS and login on).
+   Replace `XXXX` to complete your EMQX deployment address, and enter the panel's username and password. For a
+   different broker, enter its host and port. Turn on *Broker needs
    username / password* if needed. For a broker on the internet such as EMQX Cloud, turn on **Use TLS
    encryption**, which sets port 8883 (see section 9).
 3. Check that the Modbus settings match the drive (19200, 8N1, station 1 by default).
