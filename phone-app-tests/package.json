@@ -1,0 +1,16 @@
+{
+  "name": "phone-app-tests",
+  "private": true,
+  "description": "End-to-end tests for phone-app/: local MQTT broker (aedes) + simulated panel + jsdom / headless Edge",
+  "scripts": {
+    "test": "node test.js ../phone-app/index.html && node urltest.js ../phone-app/app.js",
+    "shots": "node shots.js ../phone-app/index.html ./shots"
+  },
+  "devDependencies": {
+    "aedes": "0.51.3",
+    "jsdom": "24.1.3",
+    "mqtt": "5.10.1",
+    "puppeteer-core": "23.11.1",
+    "ws": "8.18.0"
+  }
+}
