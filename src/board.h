@@ -14,7 +14,12 @@ enum class BoardRev : uint8_t {
 // that will run lv_timer_handler() (the Arduino loop task).
 bool boardInit();
 
-void boardBacklight(uint8_t percent);
+void boardBacklight(uint8_t percent);  // sets the brightness; applied now unless the screen is asleep
+
+// Screen saver: the backlight goes off. The next touch only wakes the screen, and
+// that press is hidden from LVGL until the finger lifts.
+void boardScreenSleep();
+bool boardScreenAsleep();
 BoardRev boardRev();
 const char *boardRevText();
 bool boardTouchFound();

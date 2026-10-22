@@ -5,9 +5,11 @@
 
 #include "acs550.h"
 #include "app_config.h"
+#include "board.h"
 #include "drive.h"
 #include "logger.h"
 #include "net.h"
+#include "settings.h"
 #include "ui_internal.h"
 
 using namespace acs550;
@@ -789,8 +791,20 @@ static void refreshStats()
 // ---------------------------------------------------------------------------
 // Refresh loop
 // ---------------------------------------------------------------------------
+static void screenSaver()
+{
+    static uint32_t settingsVer = 0;
+    static uint32_t timeoutMs = 0;
+    if (settingsVer != settingsVersion()) {  // only copy the settings when they change
+        settingsVer = settingsVersion();
+        timeoutMs = settingsGet().screenOffMin * 60000UL;
+    }
+    if (timeoutMs && !boardScreenAsleep() && lv_disp_get_inactive_time(nullptr) >= timeoutMs) boardScreenSleep();
+}
+
 static void refresh(lv_timer_t *)
 {
+    screenSaver();
     driveGetSnapshot(&s_snap);
     NetStatus n;
     netGetStatus(&n);

@@ -18,7 +18,9 @@ static lv_obj_t *s_taSsid, *s_taWifiPass, *s_btnScan;
 static lv_obj_t *s_swMqtt, *s_taHost, *s_taPort, *s_swTls, *s_swAuth, *s_taUser, *s_taMqttPass, *s_taBase, *s_taSuffix;
 static lv_obj_t *s_swRetain, *s_swCtrl, *s_swParW, *s_taMinMs;
 static lv_obj_t *s_ddBaud, *s_ddFmt, *s_taSlave, *s_taPoll;
-static lv_obj_t *s_slBright, *s_taTz;
+static lv_obj_t *s_slBright, *s_ddScreenOff, *s_taTz;
+static const uint8_t SCREEN_OFF_MIN[] = {0, 1, 5, 15, 30, 60};
+static const char *SCREEN_OFF_OPTIONS = "Never\n1 min\n5 min\n15 min\n30 min\n60 min";
 static lv_obj_t *s_saveLbl, *s_infoLbl;
 static bool s_scanning = false;
 static const char *s_bootInfo = "";
@@ -274,6 +276,7 @@ static void onSave(lv_event_t *)
     const long poll = atol(lv_textarea_get_text(s_taPoll));
 
     s.brightness = lv_slider_get_value(s_slBright);
+    s.screenOffMin = SCREEN_OFF_MIN[lv_dropdown_get_selected(s_ddScreenOff)];
     s.timezone = textOf(s_taTz);
     if (s.timezone.isEmpty()) s.timezone = "UTC0";
 
@@ -402,6 +405,12 @@ void buildSetupTab(lv_obj_t *tab, const char *bootInfo)
     lv_obj_add_event_cb(
         s_slBright, [](lv_event_t *e) { boardBacklight(lv_slider_get_value(lv_event_get_target(e))); },
         LV_EVENT_VALUE_CHANGED, nullptr);
+    uint16_t offIdx = 3;  // 15 min
+    for (uint16_t i = 0; i < sizeof(SCREEN_OFF_MIN); i++)
+        if (SCREEN_OFF_MIN[i] == st.screenOffMin) offIdx = i;
+    s_ddScreenOff = dropdownField(sec, "Screen off after no touch", SCREEN_OFF_OPTIONS, offIdx);
+    hint(sec, "Only the backlight goes off; the drive is still monitored. Touching the dark screen just turns it "
+              "back on, and that touch doesn't press anything.");
     s_taTz = textField(sec, "Time zone (POSIX TZ)", st.timezone.c_str(), false, "UTC0");
     hint(sec, "Examples: EST5EDT,M3.2.0,M11.1.0   CST6CDT,M3.2.0,M11.1.0   AEST-10AEDT,M10.1.0,M4.1.0/3   GMT0BST,M3.5.0/1,M10.5.0");
 

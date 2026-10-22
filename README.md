@@ -11,7 +11,10 @@ mirrors everything to MQTT at the same time.
 - **Param page:** read or write any parameter in engineering units (2202 in seconds, 1105 in rpm, …).
 - **Log page:** every command, comms event and fault with a timestamp, plus Modbus counters.
 - **Setup page:** Wi-Fi (with network scan), MQTT broker (optional username and password), Modbus
-  settings, brightness and time zone. Everything is stored in flash and survives reboots.
+  settings, brightness, screen timeout and time zone. Everything is stored in flash and survives reboots.
+- **Screen timeout:** the backlight goes off after 15 minutes without a touch (Setup: never, 1, 5, 15, 30 or
+  60 min). The drive is still monitored and MQTT keeps working. Touching the dark screen only turns it back on;
+  that touch never reaches the button underneath, so buttons work again from the next touch.
 - **Watchdog:** if the UI, Modbus or network task hangs for 20 s, the panel reboots and picks up
   control of the drive again.
 
@@ -79,13 +82,43 @@ CH32V003, and the Setup page shows which revision it found. If the picture is up
 ## 4. First start
 
 1. Open **Setup**, tap **Scan**, pick your network and enter the password.
-2. Enter the MQTT broker host and port. Turn on *Broker needs username / password* if needed. For a broker
-   on the internet such as EMQX Cloud, turn on **Use TLS encryption**, which sets port 8883 (see section 9).
+2. The broker comes pre-filled with Powermate's EMQX Cloud deployment (port 8883, TLS and login on). Enter the
+   panel's username and password. For a different broker, enter its host and port. Turn on *Broker needs
+   username / password* if needed. For a broker on the internet such as EMQX Cloud, turn on **Use TLS
+   encryption**, which sets port 8883 (see section 9).
 3. Check that the Modbus settings match the drive (19200, 8N1, station 1 by default).
 4. Tap **Save & apply**. Settings take effect immediately without a reboot.
 
 The header dots show **DRIVE / WIFI / MQTT** status: green means connected, yellow means connecting, red or grey means down
 or not set up.
+
+### Bench testing without the drive
+
+[tools/acs550_sim.py](tools/acs550_sim.py) makes a PC act like the ACS550. Connect a USB-RS485 adapter to the
+panel's RS485 A/B terminals, then double-click [tools/run_sim.bat](tools/run_sim.bat) (it uses COM4; edit the file if
+your adapter is on another port). Or run it with the Python that PlatformIO installed, which already has pyserial:
+
+```powershell
+& "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" tools\acs550_sim.py --port COM4
+```
+
+It answers the same registers as the drive: 19200 8N1, station 1, and scalar mode with a 37 kW 50 Hz 1475 rpm motor.
+All of this is set in **ACS550-Simulator.ini**, which it creates next to itself on the first run (press **e** to open
+it, then restart): COM port, station, baud and format, scalar or vector, motor nameplate, REF1 MAX, ramp times,
+direction, comm-loss trip, load, supply voltage, and any other parameter by number. START ramps the motor to the setpoint, STOP ramps it down, and COAST, QUICK STOP and
+RESET work as on the drive. Amps, kW and temperature follow a pump load. If the panel goes quiet for 3 s, the
+simulator trips with fault 28, as the drive does with `3018 = 1`. Flashing the panel while it runs causes this
+too.
+
+Keys: **f** trip a fault, **r** reset from the keypad, **l** keypad LOC/REM, **p** power-cycle the drive, **c** cut
+the cable, **+ / −** load, **v** show every Modbus frame, **e** open the settings, **q** quit. If it reports bytes
+arriving but no valid frames, swap A and B.
+
+**On any Windows PC:** double-click [tools/build_exe.bat](tools/build_exe.bat) to build
+`tools\dist\ACS550-Simulator.exe` (about 7 MB). Copy that one file to any 64-bit Windows 10/11 PC and double-click
+it: no Python or install needed. It finds the adapter by itself, or asks if there are several serial ports. The PC
+needs the adapter's driver (for CH340 adapters Windows Update usually installs it). Because the exe isn't
+code-signed, Windows SmartScreen or antivirus may warn the first time; choose *More info → Run anyway*.
 
 ## 5. Speed scaling
 
@@ -135,9 +168,9 @@ published at most once per *publish interval* (1000 ms by default), and unchange
 | `Drive/XXXX` | number, e.g. `Drive/2202` = `12.5` | Write parameter XXXX in engineering units |
 
 ```
-mosquitto_pub -h broker -t Drive/0002 -m 3000
-mosquitto_pub -h broker -t Drive/0001 -m START
-mosquitto_pub -h broker -t Drive/1010 -m "?"
+mosquitto_pub -h broker -q 1 -t Drive/0002 -m 3000
+mosquitto_pub -h broker -q 1 -t Drive/0001 -m START
+mosquitto_pub -h broker -q 1 -t Drive/1010 -m "?"
 ```
 
 Rules that keep this safe:
@@ -145,8 +178,11 @@ Rules that keep this safe:
 - **Retained command messages are ignored.** A stale retained `START` must never restart the motor after a
   reboot, so publish commands with retain off.
 - Commands share the topics the panel publishes to, so the panel recognises and ignores its own messages
-  when they come back. To keep commands separate, set **Command topic suffix** to `/set`. Commands
-  then go to `Drive/XXXX/set`, and the panel still publishes values to `Drive/XXXX`.
+  when they come back. It publishes with QoS 0, so a command sent with **QoS 1** (as the phone app does) is
+  always treated as a command. With QoS 0, a command that exactly matches a value the panel has just published
+  on the same topic may be taken for its echo; send commands with `-q 1` to be sure. To keep commands
+  separate completely, set **Command topic suffix** to `/set`. Commands then go to `Drive/XXXX/set`, and the
+  panel still publishes values to `Drive/XXXX`.
 - Actual values and fault history (groups 01, 03 and 04) are read-only.
 - *Allow start / stop / speed over MQTT* is on by default. *Allow parameter writes over MQTT* is **off** by
   default, so turn it on in Setup if you want it.
@@ -169,7 +205,8 @@ Rules that keep this safe:
 
 | Symptom | Check |
 |---|---|
-| Timeouts only | A/B swapped, 9802 = 1, baud and parity match, drive power-cycled after changing group 53 |
+| `Timeout (no reply)` | Nothing came back: wiring, 9802 = 1, station ID, drive power-cycled after changing group 53 |
+| `Timeout: N bytes, no valid reply (…)` | Something came back but it's garbage: A/B swapped, or baud/parity don't match 5303/5304 |
 | `Modbus exception 2` | Parameter or register does not exist on this firmware |
 | `LOCAL / NOT REMOTE` | Press LOC/REM on the keypad |
 | START does nothing | 1001 = 10, 1601 not waiting on a digital input, no active fault |
@@ -233,6 +270,10 @@ stored only in that phone's browser. Untick *Remember password* if you don't wan
 | [include/app_config.h](include/app_config.h) | Pins, rotation, timeouts |
 | [phone-app/](phone-app/) | Phone web app (`index.html`, `app.js`, `app.css`, service worker, icons, MQTT.js 5.10.1) |
 | [phone-app/brand/](phone-app/brand/), [phone-app/fonts/](phone-app/fonts/) | Powermate logo and mark, Libre Franklin font (SIL Open Font License, see `OFL.txt`) |
+| [phone-app-tests/](phone-app-tests/) | Phone app tests: local broker + simulated panel (`npm install`, `npm test`, `npm run shots`) |
+| [tools/acs550_sim.py](tools/acs550_sim.py) | ACS550 simulator for bench testing the panel over a USB-RS485 adapter |
+| [tools/run_sim.bat](tools/run_sim.bat), [tools/build_exe.bat](tools/build_exe.bat) | Start the simulator; build it into a stand-alone `ACS550-Simulator.exe` |
+| [CLAUDE.md](CLAUDE.md) | Project notes that Claude Code loads automatically in new sessions |
 
 To publish more parameters with proper scaling, add them to the table in `src/acs550.cpp`. Parameters not in the
 table are published as raw integers.

@@ -43,8 +43,11 @@ private:
     uint32_t gapUs_ = 2000;
     int64_t lastActivityUs_ = 0;
     uint8_t lastEx_ = 0;
+    bool echoSeen_ = false;  // the transceiver sends our requests back to us
+    uint32_t rawCount_ = 0;  // bytes received during the last transaction
+    uint8_t rawHead_[4] = {};
     MbStats stats_;
-    mutable char text_[48];
+    mutable char text_[64];
 };
 
 uint16_t modbusCrc16(const uint8_t *data, size_t len);

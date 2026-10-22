@@ -43,42 +43,64 @@ static NetStatus s_status = {};
 
 // ---------------------------------------------------------------------------
 // Echo suppression. With an empty command suffix the panel subscribes to the
-// same topics it publishes, so each of its own messages comes back once.
+// same topics it publishes, so each of its own messages comes back. It must
+// never take one of them for a command, however late it arrives: a stale echo
+// of 0001 = RUN would restart the motor after a STOP.
+// - The panel publishes with QoS 0, so its own messages come back as QoS 0.
+//   The phone sends commands with QoS 1, so those are never checked here.
+// - Every published value is remembered for 60 s. 0001/0002 have their own
+//   list so that frequent value traffic can't push them out.
 // ---------------------------------------------------------------------------
 struct Echo {
     uint16_t par;
-    uint32_t ms;
+    uint32_t ms;  // 0 = free
     char payload[16];
 };
-static Echo s_echo[32];
-static uint8_t s_echoNext = 0;
+static Echo s_echoValues[64];
+static Echo s_echoControl[16];
+static uint8_t s_echoValuesNext = 0, s_echoControlNext = 0;
 static portMUX_TYPE s_echoMux = portMUX_INITIALIZER_UNLOCKED;
+static constexpr uint32_t ECHO_MAX_AGE_MS = 60000;
 
-static void echoRecord(uint16_t par, const char *payload)
+static Echo *echoRecord(uint16_t par, const char *payload)
+{
+    const bool control = par == 1 || par == 2;
+    Echo *ring = control ? s_echoControl : s_echoValues;
+    const uint8_t size = control ? 16 : 64;
+    uint8_t &next = control ? s_echoControlNext : s_echoValuesNext;
+    taskENTER_CRITICAL(&s_echoMux);
+    Echo *e = &ring[next];
+    next = (next + 1) % size;
+    e->par = par;
+    e->ms = millis() | 1;  // never 0
+    strlcpy(e->payload, payload, sizeof(e->payload));
+    taskEXIT_CRITICAL(&s_echoMux);
+    return e;
+}
+
+static void echoForget(Echo *e)
 {
     taskENTER_CRITICAL(&s_echoMux);
-    Echo &e = s_echo[s_echoNext];
-    s_echoNext = (s_echoNext + 1) % (sizeof(s_echo) / sizeof(s_echo[0]));
-    e.par = par;
-    e.ms = millis();
-    strlcpy(e.payload, payload, sizeof(e.payload));
+    e->ms = 0;
     taskEXIT_CRITICAL(&s_echoMux);
 }
 
 static bool echoConsume(uint16_t par, const char *payload)
 {
-    bool found = false;
+    Echo *ring = par == 1 || par == 2 ? s_echoControl : s_echoValues;
+    const uint8_t size = par == 1 || par == 2 ? 16 : 64;
     const uint32_t now = millis();
+    Echo *oldest = nullptr;
     taskENTER_CRITICAL(&s_echoMux);
-    for (Echo &e : s_echo) {
-        if (e.ms && e.par == par && now - e.ms < 5000 && strcmp(e.payload, payload) == 0) {
-            e.ms = 0;
-            found = true;
-            break;
-        }
+    for (uint8_t i = 0; i < size; i++) {
+        Echo &e = ring[i];
+        if (e.ms && now - e.ms >= ECHO_MAX_AGE_MS) e.ms = 0;
+        if (e.ms && e.par == par && strcmp(e.payload, payload) == 0 && (!oldest || now - e.ms > now - oldest->ms))
+            oldest = &e;
     }
+    if (oldest) oldest->ms = 0;
     taskEXIT_CRITICAL(&s_echoMux);
-    return found;
+    return oldest != nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +130,16 @@ bool netTakeRepublishRequest()
     return true;
 }
 
+// Messages are sent straight away rather than with esp_mqtt_client_enqueue: the MQTT task
+// sends only one queued message per loop (and waits up to 1 s per loop), so a running drive
+// built up a backlog of several seconds. A publish blocks for at most the network timeout,
+// and a failed one drops the connection; everything is republished on reconnect.
+static bool publishNow(const char *topic, const char *payload, bool retain)
+{
+    esp_task_wdt_reset();
+    return esp_mqtt_client_publish(s_client, topic, payload, 0, 0, retain) >= 0;
+}
+
 static void publishQueued()
 {
     PubItem it;
@@ -115,8 +147,9 @@ static void publishQueued()
         if (!s_client || !s_mqttConnected) continue;
         char topic[96];
         snprintf(topic, sizeof(topic), "%s/%s", s_base.c_str(), it.sub);
-        if (s_suffix.isEmpty() && isdigit((unsigned char)it.sub[0])) echoRecord(atoi(it.sub), it.payload);
-        esp_mqtt_client_enqueue(s_client, topic, it.payload, 0, 0, it.retain, true);
+        Echo *echo = nullptr;
+        if (s_suffix.isEmpty() && isdigit((unsigned char)it.sub[0])) echo = echoRecord(atoi(it.sub), it.payload);
+        if (!publishNow(topic, it.payload, it.retain) && echo) echoForget(echo);
     }
 }
 
@@ -130,7 +163,7 @@ static void forwardLog()
     for (int i = 0; i < 10 && logNext(&s_logSeq, &e); i++) {
         char msg[128];
         snprintf(msg, sizeof(msg), "%s %c %s", e.time, e.level, e.text);
-        esp_mqtt_client_enqueue(s_client, s_logTopic.c_str(), msg, 0, 0, 0, true);
+        if (!publishNow(s_logTopic.c_str(), msg, false)) break;
     }
 }
 
@@ -242,7 +275,7 @@ static void handleIncoming(esp_mqtt_event_handle_t ev)
         if (sl) logf(LOG_WARN, "MQTT %s: retained message ignored - publish commands without retain", topic);
         return;
     }
-    if (!sl && echoConsume(par, p)) return;
+    if (!sl && ev->qos == 0 && echoConsume(par, p)) return;
     dispatch(par, p, topic);
 }
 

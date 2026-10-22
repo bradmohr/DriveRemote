@@ -6,3 +6,11 @@
 .vscode/launch.json
 .vscode/ipch
 compile_commands.json
+phone-app-tests/node_modules
+phone-app-tests/shots
+phone-app-tests/package-lock.json
+__pycache__/
+tools/.buildenv
+tools/build
+tools/dist
+tools/ACS550-Simulator.ini

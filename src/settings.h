@@ -10,10 +10,10 @@ struct Settings {
 
     // MQTT
     bool mqttEnabled = true;
-    String mqttHost;
-    uint16_t mqttPort = 1883;
-    bool mqttTls = false;           // encrypted connection (EMQX Cloud: port 8883)
-    bool mqttAuth = false;
+    String mqttHost = "l11f1a19.ala.asia-southeast1.emqxsl.com";  // owner's EMQX Cloud (default for now)
+    uint16_t mqttPort = 8883;
+    bool mqttTls = true;            // encrypted connection (EMQX Cloud: port 8883)
+    bool mqttAuth = true;
     String mqttUser;
     String mqttPass;
     String mqttBase = "Drive";      // topics are <base>/<XXXX>
@@ -31,6 +31,7 @@ struct Settings {
 
     // Panel
     uint8_t brightness = 100;       // percent (dimming needs a V4 board)
+    uint8_t screenOffMin = 15;      // backlight off after this long without a touch, 0 = never
     String timezone = "UTC0";       // POSIX TZ string, e.g. "EST5EDT,M3.2.0,M11.1.0"
 };
 

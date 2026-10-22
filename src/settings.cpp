@@ -41,6 +41,7 @@ void settingsInit()
     s.mbSlave = p.getUChar("bSlave", d.mbSlave);
     s.mbPollMs = p.getUShort("bPoll", d.mbPollMs);
     s.brightness = p.getUChar("pBright", d.brightness);
+    s.screenOffMin = p.getUChar("pScrOff", d.screenOffMin);
     s.timezone = p.getString("pTz", d.timezone);
     p.end();
 
@@ -49,6 +50,13 @@ void settingsInit()
     if (s.mbSlave < 1 || s.mbSlave > 247) s.mbSlave = 1;
     if (s.mbPollMs < 100 || s.mbPollMs > 5000) s.mbPollMs = 250;
     if (s.mqttBase.isEmpty()) s.mqttBase = d.mqttBase;
+    // No broker entered yet (or saved before there was a default): use the default broker
+    if (s.mqttHost.isEmpty()) {
+        s.mqttHost = d.mqttHost;
+        s.mqttPort = d.mqttPort;
+        s.mqttTls = d.mqttTls;
+        s.mqttAuth = d.mqttAuth;
+    }
     if (s.brightness < 10 || s.brightness > 100) s.brightness = 100;
 }
 
@@ -88,6 +96,7 @@ void settingsSave(const Settings &s)
     p.putUChar("bSlave", s.mbSlave);
     p.putUShort("bPoll", s.mbPollMs);
     p.putUChar("pBright", s.brightness);
+    p.putUChar("pScrOff", s.screenOffMin);
     p.putString("pTz", s.timezone);
     p.end();
 

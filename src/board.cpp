@@ -97,16 +97,35 @@ static void expanderInit()
     }
 }
 
-void boardBacklight(uint8_t percent)
+static uint8_t s_brightness = 100;
+static bool s_asleep = false;     // backlight switched off by the screen saver
+static bool s_wakeTouch = false;  // the touch that woke the screen, hidden from LVGL until released
+
+static void setBacklight(uint8_t percent)
 {
-    if (percent > 100) percent = 100;
     if (s_rev == BoardRev::V4) {
-        i2cWriteReg(CH32_ADDR, CH32_REG_PWM, (uint8_t)((percent * 255 + 50) / 100));
+        // The PWM drives the backlight inverted: 0 = full brightness, 255 = off
+        i2cWriteReg(CH32_ADDR, CH32_REG_PWM, (uint8_t)(((100 - percent) * 255 + 50) / 100));
     } else if (s_rev == BoardRev::V1toV3) {
         s_tcaOut = percent ? (s_tcaOut | TCA_BL_EN) : (s_tcaOut & ~TCA_BL_EN);  // on/off only
         i2cWriteReg(TCA_ADDR, TCA_REG_OUT, s_tcaOut);
     }
 }
+
+void boardBacklight(uint8_t percent)
+{
+    s_brightness = min<uint8_t>(percent, 100);
+    if (!s_asleep) setBacklight(s_brightness);
+}
+
+void boardScreenSleep()
+{
+    if (s_asleep) return;
+    s_asleep = true;
+    setBacklight(0);
+}
+
+bool boardScreenAsleep() { return s_asleep; }
 
 BoardRev boardRev() { return s_rev; }
 
@@ -270,21 +289,60 @@ static bool gtWrite8(uint16_t reg, uint8_t value)
     return Wire.endTransmission() == 0;
 }
 
-static void touchInit()
+static bool touchProbe()
 {
     for (uint8_t addr : {0x5D, 0x14}) {
         if (i2cProbe(addr)) {
             s_touchAddr = addr;
-            break;
+            return true;
         }
     }
+    return false;
+}
+
+// Pulse the GT911 reset line through the IO expander. INT is held low, so it comes back at 0x5D.
+static void touchReset()
+{
+    if (s_rev == BoardRev::V4) {
+        i2cWriteReg(CH32_ADDR, CH32_REG_OUT, CH32_SYS_EN | CH32_LCD_RST);
+        delay(10);
+        i2cWriteReg(CH32_ADDR, CH32_REG_OUT, CH32_SYS_EN | CH32_LCD_RST | CH32_TP_RST);
+    } else if (s_rev == BoardRev::V1toV3) {
+        i2cWriteReg(TCA_ADDR, TCA_REG_OUT, s_tcaOut & ~TCA_TP_RST);
+        delay(10);
+        i2cWriteReg(TCA_ADDR, TCA_REG_OUT, s_tcaOut);
+    }
+    delay(100);
+}
+
+static void touchInit()
+{
+    for (int attempt = 0; attempt < 6 && !touchProbe(); attempt++) {
+        if (attempt == 2) touchReset();
+        delay(50);
+    }
     if (!s_touchAddr) {
-        logf(LOG_ERR, "Touch controller (GT911) not found");
+        char list[64] = "";
+        size_t n = 0;
+        for (uint8_t a = 0x08; a < 0x78 && n < sizeof(list) - 6; a++)
+            if (i2cProbe(a)) n += snprintf(list + n, sizeof(list) - n, " 0x%02X", a);
+        logf(LOG_ERR, "Touch controller (GT911) not found, still trying. I2C devices:%s", n ? list : " none");
         return;
     }
     char id[5] = {0};
     gtRead(0x8140, (uint8_t *)id, 4);
     logf(LOG_INFO, "Touch GT%s at 0x%02X", id, s_touchAddr);
+}
+
+// Keep looking for a touch controller that didn't answer at boot, so touch comes back without a reboot
+static void touchRetry()
+{
+    static uint32_t lastTry = 0;
+    static uint8_t tries = 0;
+    if (millis() - lastTry < 3000) return;
+    lastTry = millis();
+    if (++tries % 5 == 0) touchReset();
+    if (touchProbe()) logf(LOG_OK, "Touch controller found at 0x%02X", s_touchAddr);
 }
 
 bool boardTouchFound() { return s_touchAddr != 0; }
@@ -294,6 +352,7 @@ static void touchReadCb(lv_indev_drv_t *, lv_indev_data_t *data)
     static lv_coord_t lastX = 0, lastY = 0;
     static bool pressed = false;
 
+    if (!s_touchAddr) touchRetry();
     uint8_t status;
     if (s_touchAddr && gtRead(0x814E, &status, 1) && (status & 0x80)) {
         uint8_t points = status & 0x0F;
@@ -307,10 +366,19 @@ static void touchReadCb(lv_indev_drv_t *, lv_indev_data_t *data)
         }
         gtWrite8(0x814E, 0);  // release the buffer for the next sample
     }
+    // A touch on the dark screen only wakes it. LVGL sees "released" until that finger
+    // lifts, so the press can't operate whatever is underneath.
+    if (pressed && s_asleep) {
+        s_asleep = false;
+        s_wakeTouch = true;
+        setBacklight(s_brightness);
+        lv_disp_trig_activity(nullptr);
+    }
+    if (s_wakeTouch && !pressed) s_wakeTouch = false;
     // Raw panel coordinates; LVGL applies the display rotation itself
     data->point.x = lastX;
     data->point.y = lastY;
-    data->state = pressed ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
+    data->state = pressed && !s_wakeTouch ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
 }
 
 // ---------------------------------------------------------------------------

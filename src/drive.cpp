@@ -594,7 +594,11 @@ void driveStart()
     s_shared = st;
     s_cmdQ = xQueueCreate(16, sizeof(DriveCmd));
     s_snapMutex = xSemaphoreCreateMutex();
-    xTaskCreatePinnedToCore(driveTask, "drive", 8192, nullptr, 5, nullptr, 0);
+    // Priority 10: above the MQTT task (5, which runs the TLS handshake) and the net task (2), below
+    // Wi-Fi and lwIP. At equal priority a TLS handshake could pause this task between sending a
+    // request and clearing the echo, and the start of the drive's reply was cleared with it.
+    // The task mostly waits on the UART, so it doesn't hold anything else up.
+    xTaskCreatePinnedToCore(driveTask, "drive", 8192, nullptr, 10, nullptr, 0);
 }
 
 bool driveSend(const DriveCmd &cmd)
